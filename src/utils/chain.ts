@@ -1,14 +1,19 @@
 import { OpenAI } from "langchain/llms/openai";
 import { PromptTemplate } from "langchain/prompts";
 import { LLMChain } from "langchain/chains";
+import type { ModelSettings } from "./types";
+import { GPT_35_TURBO } from "./constants";
 
-export const createModel = (customApiKey: string) =>
+export const createModel = (settings: ModelSettings) =>
   new OpenAI({
     openAIApiKey:
-      customApiKey === "" ? process.env.OPENAI_API_KEY : customApiKey,
-    temperature: 0.9,
-    modelName: "gpt-3.5-turbo",
-    maxTokens: 300,
+      settings.customApiKey === ""
+        ? process.env.OPENAI_API_KEY
+        : settings.customApiKey,
+    temperature: settings.customTemperature || 0.9,
+    modelName:
+      settings.customModelName === "" ? GPT_35_TURBO : settings.customModelName,
+    maxTokens: 750,
   });
 
 const startGoalPrompt = new PromptTemplate({
@@ -17,7 +22,10 @@ const startGoalPrompt = new PromptTemplate({
   inputVariables: ["goal"],
 });
 export const startGoalAgent = async (model: OpenAI, goal: string) => {
-  return await new LLMChain({ llm: model, prompt: startGoalPrompt }).call({
+  return await new LLMChain({
+    llm: model,
+    prompt: startGoalPrompt,
+  }).call({
     goal,
   });
 };
@@ -72,6 +80,21 @@ export const extractArray = (inputStr: string): string[] => {
     }
   }
 
-  console.error("Error, could not extract array from inputString:", inputStr);
+  console.warn("Error, could not extract array from inputString:", inputStr);
   return [];
+};
+
+// Model will return tasks such as "No tasks added". We should filter these
+export const realTasksFilter = (input: string): boolean => {
+  const noTaskRegex =
+    /^No( (new|further|additional|extra|other))? tasks? (is )?(required|needed|added|created|inputted).*$/i;
+  const taskCompleteRegex =
+    /^Task (complete|completed|finished|done|over|success).*/i;
+  const doNothingRegex = /^(\s*|Do nothing(\s.*)?)$/i;
+
+  return (
+    !noTaskRegex.test(input) &&
+    !taskCompleteRegex.test(input) &&
+    !doNothingRegex.test(input)
+  );
 };
